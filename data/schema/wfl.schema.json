@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RMM Workflow (.wfl)",
+  "type": "object",
+  "required": ["version", "name", "triggers", "steps", "observability"],
+  "properties": {
+    "version": { "type": "string", "enum": ["1.0"] },
+    "name": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "triggers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["type"],
+        "properties": {
+          "type": { "type": "string", "enum": ["schedule", "event"] },
+          "cron": { "type": "string" },
+          "event": { "type": "string" },
+          "filters": { "type": "object" }
+        },
+        "allOf": [
+          { "if": { "properties": { "type": { "const": "schedule"} } },
+            "then": { "required": ["cron"] } },
+          { "if": { "properties": { "type": { "const": "event"} } },
+            "then": { "required": ["event"] } }
+        ]
+      }
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "action_id"],
+        "properties": {
+          "id": { "type": "string", "pattern": "^[a-z0-9\\-]{1,32}$" },
+          "action_id": { "type": "string" },
+          "params": { "type": "object" },
+          "on_success": { "type": "string" },
+          "on_failure": { "type": "string" },
+          "retry": {
+            "type": "object",
+            "properties": {
+              "max_attempts": { "type": "integer", "minimum": 0, "maximum": 10 },
+              "backoff_seconds": { "type": "integer", "minimum": 0, "maximum": 3600 }
+            }
+          }
+        }
+      }
+    },
+    "observability": {
+      "type": "object",
+      "required": ["notifications"],
+      "properties": {
+        "notifications": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["channel", "level"],
+            "properties": {
+              "channel": { "type": "string", "enum": ["email", "slack", "ticket"] },
+              "level": { "type": "string", "enum": ["info", "warn", "error"] }
+            }
+          }
+        }
+      }
+    }
+  },
+  "additionalProperties": false
+}

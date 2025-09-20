@@ -1,0 +1,34 @@
+{
+  "actions": [
+    {
+        "id": "os.patch.apply",
+        "params_schema": {
+            "type": "object", 
+            "properties": {
+                "kb_id": { "type": "string" }, 
+                "reboot_allowed": { "type": "boolean" }
+            }
+        }
+    },
+    {
+        "id": "asset.filter",
+        "params_schema": {
+            "type": "object", "properties": {
+                "os": { "type": "string" }, 
+                "battery_state": { "type": "string" }
+            }
+        }
+    },
+    {
+        "id": "notify.send", 
+        "params_schema": {
+            "type": "object", 
+            "properties": {
+                "channel": { "type": "string" }, 
+                "message": { "type": "string" }
+            }
+        }
+    }
+  ],
+  "allow_list": ["os.patch.apply", "asset.filter", "notify.send"]
+}

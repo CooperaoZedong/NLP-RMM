@@ -1,0 +1,9 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {"Effect": "Allow","Action": ["logs:*"],"Resource": "*"},
+    {"Effect": "Allow","Action": ["s3:*"],"Resource": ["arn:aws:s3:::VSA_BUCKET","arn:aws:s3:::VSA_BUCKET/*"]},
+    {"Effect": "Allow","Action": ["ecr:GetAuthorizationToken","ecr:BatchGetImage","ecr:GetDownloadUrlForLayer"],"Resource": "*"},
+    {"Effect": "Allow","Action": ["sagemaker:*"],"Resource": "*"}
+  ]
+}
