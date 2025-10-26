@@ -2,69 +2,654 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "RMM Workflow (.wfl)",
   "type": "object",
-  "required": ["version", "name", "triggers", "steps", "observability"],
+  "additionalProperties": true,
+  "required": ["workflowSteps"],
   "properties": {
-    "version": { "type": "string", "enum": ["1.0"] },
-    "name": { "type": "string", "minLength": 1, "maxLength": 128 },
-    "triggers": {
+    "workflowSteps": {
       "type": "array",
       "minItems": 1,
+      "prefixItems": [
+        { "$ref": "#/$defs/TriggerStep" }
+      ],
       "items": {
-        "type": "object",
-        "required": ["type"],
-        "properties": {
-          "type": { "type": "string", "enum": ["schedule", "event"] },
-          "cron": { "type": "string" },
-          "event": { "type": "string" },
-          "filters": { "type": "object" }
-        },
         "allOf": [
-          { "if": { "properties": { "type": { "const": "schedule"} } },
-            "then": { "required": ["cron"] } },
-          { "if": { "properties": { "type": { "const": "event"} } },
-            "then": { "required": ["event"] } }
+          { "$ref": "#/$defs/Step" },
+          { "not": { "$ref": "#/$defs/TriggerStep" } }
         ]
       }
     },
-    "steps": {
-      "type": "array",
-      "minItems": 1,
-      "items": {
-        "type": "object",
-        "required": ["id", "action_id"],
-        "properties": {
-          "id": { "type": "string", "pattern": "^[a-z0-9\\-]{1,32}$" },
-          "action_id": { "type": "string" },
-          "params": { "type": "object" },
-          "on_success": { "type": "string" },
-          "on_failure": { "type": "string" },
-          "retry": {
-            "type": "object",
-            "properties": {
-              "max_attempts": { "type": "integer", "minimum": 0, "maximum": 10 },
-              "backoff_seconds": { "type": "integer", "minimum": 0, "maximum": 3600 }
-            }
+    "Name": { "type": ["string", "null"] },
+    "Description": { "type": ["string", "null"] },
+    "Scope": { "type": ["string", "null"] },
+    "Schedule": { "type": ["string", "null"] },
+    "Timeout": { "type": ["integer", "null"] },
+    "Version": { "type": ["integer", "null"] }
+  },
+  "$defs": {
+    "Id": { "type": ["integer","string"] },
+    "VarRef": {
+      "type": "object",
+      "required": ["variableId","propertyId","workflowStepId","sourceId","displayName","type","workflowStepName"],
+      "additionalProperties": false,
+      "properties": {
+        "variableId": { "type": "string", "pattern": "^[0-9]{6,}$" },
+        "propertyId": { "type": "string", "const": "variable" },
+        "workflowStepId": { "$ref": "#/$defs/Id" },
+        "sourceId": { "type": "string", "minLength": 1 },
+        "displayName": { "type": "string", "minLength": 1 },
+        "type": { "type": "integer", "enum": [0,1,2,3] },
+        "workflowStepName": { "type": "string", "const": "Variable" }
+      }
+    },
+
+    "TriggerBase": {
+      "type": "object",
+      "required": ["workflowStepType","triggerType","displayName","id"],
+      "additionalProperties": false,
+      "properties": {
+        "workflowStepType": { "type": "integer", "const": 1 },
+        "id": { "$ref": "#/$defs/Id" },
+        "displayName": { "type": "string" },
+        "skipOffline": { "type": "boolean" },
+        "triggerType": { "type": "integer", "enum": [0,1,2] },
+        "triggerSubType": { "type": ["string","null"] },
+        "notificationType": { "type": ["string","null"] }
+      }
+    },
+
+    "TriggerManual": {
+      "allOf": [
+        { "$ref": "#/$defs/TriggerBase" },
+        { "type": "object",
+          "required": ["skipOffline","triggerSubType"],
+          "properties": {
+            "triggerType": { "const": 2 },
+            "triggerSubType": { "const": "Manual" },
+            "notificationType": { "type": "null" }
+          }
+        }
+      ]
+    },
+
+    "TriggerNotification": {
+      "allOf": [
+        { "$ref": "#/$defs/TriggerBase" },
+        { "type": "object",
+          "required": ["skipOffline","notificationType","triggerSubType"],
+          "properties": {
+            "triggerType": { "const": 0 },
+            "notificationType": {
+              "type": "string",
+              "enum": [
+                "SERVICE_STOP","SERVICE_MISSED","USER_LOGGED_IN","USER_LOGGED_OUT",
+                "LOW_MEMORY","HIGH_CPU_USAGE","HIGH_PING_TIME","PING_ERROR",
+                "LOW_HDD_FREE_SPACE","COMPUTER_OFFLINE","COMPUTER_BACK_ONLINE",
+                "PORT_NOT_AVAILABLE","EVENT_LOG_WATCH","REBOOT_REQUIRED",
+                "LOW_BATTERY","WINDOWS_UPDATES_AVAILABLE","PROCESS_STARTED",
+                "PROCESS_STOPPED","PERFORMANCE_COUNTER","APPLICATIONS_ADDED",
+                "USB_DEVICE_INSERT","USB_DEVICE_REMOVE","IP_CHANGED","USER_SUPPORT_REQUEST",
+                "WEB_SITE_ERROR","SNMP_ALERT","SECURITY_FIREWALL_DISABLED",
+                "SECURITY_ANTIVIRUS_DISABLED","HDD_SMART_FAILURE",
+                "ANTIVIRUS_DEFINITIONS_OUTDATED","COMPUTER_REGISTERED"
+              ]
+            },
+            "triggerSubType": { "type": "string" }
+          }
+        }
+      ]
+    },
+
+    "ScheduleCommon": {
+      "type": "object",
+      "required": ["startDate","timezone","frequency","frequencySubinterval","frequencyInterval"],
+      "additionalProperties": false,
+      "properties": {
+        "startDate": { "type": "string", "format": "date-time" },
+        "timezone": { "type": "string" },
+        "frequency": { "type": "integer", "minimum": 1 },
+        "frequencySubinterval": { "type": "integer" },
+        "frequencyInterval": {
+          "type": "object",
+          "required": ["uuid","id","text"],
+          "additionalProperties": false,
+          "properties": {
+            "uuid": { "type": "integer" },
+            "id": { "type": "integer", "enum": [1,2,3] },
+            "text": { "type": "string", "enum": ["Daily","Weekly","Monthly"] }
           }
         }
       }
     },
-    "observability": {
-      "type": "object",
-      "required": ["notifications"],
-      "properties": {
-        "notifications": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "required": ["channel", "level"],
-            "properties": {
-              "channel": { "type": "string", "enum": ["email", "slack", "ticket"] },
-              "level": { "type": "string", "enum": ["info", "warn", "error"] }
+
+    "TriggerScheduleDaily": {
+      "allOf": [
+        { "$ref": "#/$defs/TriggerBase" },
+        { "type": "object",
+          "required": ["skipOffline","triggerSubType","schedule"],
+          "properties": {
+            "triggerType": { "const": 2 },
+            "triggerSubType": { "const": "Scheduled" },
+            "schedule": {
+              "allOf": [
+                { "$ref": "#/$defs/ScheduleCommon" },
+                { "type": "object",
+                  "properties": {
+                    "frequencyInterval": {
+                      "type": "object",
+                      "properties": { "uuid": { "const": 1 }, "id": { "const": 1 }, "text": { "const": "Daily" } }
+                    },
+                    "frequencySubinterval": { "const": 0 }
+                  }
+                }
+              ]
             }
           }
         }
+      ]
+    },
+
+    "TriggerScheduleWeekly": {
+      "allOf": [
+        { "$ref": "#/$defs/TriggerBase" },
+        { "type": "object",
+          "required": ["skipOffline","triggerSubType","schedule"],
+          "properties": {
+            "triggerType": { "const": 2 },
+            "triggerSubType": { "const": "Scheduled" },
+            "schedule": {
+              "allOf": [
+                { "$ref": "#/$defs/ScheduleCommon" },
+                { "type": "object",
+                  "properties": {
+                    "frequencyInterval": {
+                      "type": "object",
+                      "properties": { "uuid": { "const": 4 }, "id": { "const": 2 }, "text": { "const": "Weekly" } }
+                    },
+                    "frequencySubinterval": { "type": "integer", "minimum": 1, "maximum": 127 }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+
+    "TriggerScheduleMonthly": {
+      "allOf": [
+        { "$ref": "#/$defs/TriggerBase" },
+        { "type": "object",
+          "required": ["skipOffline","triggerSubType","schedule"],
+          "properties": {
+            "triggerType": { "const": 2 },
+            "triggerSubType": { "const": "Scheduled" },
+            "schedule": {
+              "allOf": [
+                { "$ref": "#/$defs/ScheduleCommon" },
+                { "type": "object",
+                  "properties": {
+                    "frequencyInterval": {
+                      "type": "object",
+                      "properties": { "uuid": { "const": 5 }, "id": { "const": 3 }, "text": { "const": "Monthly" } }
+                    },
+                    "frequencySubinterval": { "type": "integer", "enum": [0,128,256] }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+
+    "TriggerExternal": {
+      "allOf": [
+        { "$ref": "#/$defs/TriggerBase" },
+        { "type": "object",
+          "properties": {
+            "triggerType": { "const": 1 },
+            "triggerSubType": { "type": "string", "minLength": 1 },
+            "notificationType": { "type": "null" }
+          },
+          "required": ["triggerSubType"]
+        }
+      ]
+    },
+
+    "RuleScope": {
+      "type": "object",
+      "required": ["propertyId","operator","scopeName","scopeId","computerIds","workflowStepId"],
+      "additionalProperties": false,
+      "properties": {
+        "propertyId": { "type": "string", "const": "scope" },
+        "operator": { "type": "integer", "enum": [2] },
+        "scopeName": { "type": "string" },
+        "scopeId": { "type": "integer" },
+        "computerIds": { "type": "array" },
+        "workflowStepId": { "$ref": "#/$defs/Id" }
       }
+    },
+
+    "RuleOSType": {
+      "type": "object",
+      "required": ["propertyId","operator","value","workflowStepId"],
+      "additionalProperties": false,
+      "properties": {
+        "propertyId": { "type": "string", "const": "oSType" },
+        "operator": { "type": "integer", "enum": [2] },
+        "value": { "type": "integer", "enum": [1,2,3] },
+        "workflowStepId": { "$ref": "#/$defs/Id" }
+      }
+    },
+
+    "RuleVariable": {
+      "type": "object",
+      "required": ["propertyId","operator","variablesId","variablesType","workflowStepId"],
+      "additionalProperties": false,
+      "properties": {
+        "propertyId": { "type": "string", "const": "Variable" },
+        "operator": { "type": "integer", "minimum": 0, "maximum": 12 },
+        "variablesId": { "type": "string" },
+        "variablesType": { "type": "integer", "enum": [0,1,2,9] },
+        "value": { "type": ["string","number","boolean","null"] },
+        "workflowStepId": { "$ref": "#/$defs/Id" }
+      }
+    },
+
+    "Condition": {
+      "type": "object",
+      "required": ["workflowStepType","displayName","ruleAggregation","rules","positiveOutcome","negativeOutcome","id"],
+      "additionalProperties": false,
+      "properties": {
+        "workflowStepType": { "type": "integer", "const": 2 },
+        "displayName": { "type": "string" },
+        "ruleAggregation": { "type": "integer", "enum": [0,1] },
+        "rules": { "type": "array", "minItems": 1, "items": { "oneOf": [
+          { "$ref": "#/$defs/RuleScope" }, { "$ref": "#/$defs/RuleOSType" }, { "$ref": "#/$defs/RuleVariable" }
+        ]}},
+        "positiveOutcome": { "type": "array", "items": { "$ref": "#/$defs/Step" } },
+        "negativeOutcome": { "type": "array", "items": { "$ref": "#/$defs/Step" } },
+        "id": { "$ref": "#/$defs/Id" }
+      }
+    },
+
+    "ActionBase": {
+      "type": "object",
+      "required": ["workflowStepType","actionType","displayName","parameters","id"],
+      "additionalProperties": false,
+      "properties": {
+        "workflowStepType": { "type": "integer", "const": 0 },
+        "actionType": { "type": "integer",
+          "enum": [1,2,9,14,15,19,20,21,22,23,24,25,26,27,31,32,33,34,35,36,37,38]
+        },
+        "displayName": { "type": "string" },
+        "parameters": { "type": ["object","null"] },
+        "id": { "$ref": "#/$defs/Id" }
+      }
+    },
+
+    "ActionStep": {
+      "allOf": [
+        { "$ref": "#/$defs/ActionBase" },
+        {
+          "oneOf": [
+            {
+              "properties": {
+                "actionType": { "const": 1 },
+                "parameters": {
+                  "type": "object", "required": ["serviceName"], "additionalProperties": false,
+                  "properties": { "serviceName": { "type": "string" } }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 2 },
+                "parameters": {
+                  "type": "object", "required": ["serviceName"], "additionalProperties": false,
+                  "properties": { "serviceName": { "type": "string" } }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 9 },
+                "parameters": {
+                  "type": "object", "required": ["recipients","subject","body","variables","variableRecipients"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "recipients": { "type": "array", "items": { "type": "string" } },
+                    "subject": { "type": "string" },
+                    "body": { "type": "string" },
+                    "variables": { "type": "array", "items": { "$ref": "#/$defs/VarRef" } },
+                    "variableRecipients": { "type": "array", "items": { "$ref": "#/$defs/VarRef" } }
+                  }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 14 },
+                "parameters": {
+                  "type": "object", "required": ["serviceName"], "additionalProperties": false,
+                  "properties": { "serviceName": { "type": "string" } }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 15 },
+                "parameters": {
+                  "type": "object", "required": ["status"], "additionalProperties": false,
+                  "properties": { "status": { "type": "integer", "enum": [2,3] } }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 19 },
+                "parameters": {
+                  "type": "object", "required": ["title","description","integrationId","ticketParameters","variables"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "title": { "type": "string" },
+                    "description": { "type": "string" },
+                    "integrationId": { "type": "integer" },
+                    "ticketParameters": { "type": "object" },
+                    "variables": { "type": "array", "items": { "$ref": "#/$defs/VarRef" } }
+                  }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 20 },
+                "parameters": {
+                  "type": "object", "required": ["title","integrationId","ticketParameters","ticketNoteParameters","variables"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "title": { "type": "string" },
+                    "integrationId": { "type": "integer" },
+                    "ticketParameters": { "type": "object" },
+                    "ticketNoteParameters": {
+                      "type": "object", "required": ["note","isPrivate"], "additionalProperties": false,
+                      "properties": { "note": { "type": "string" }, "isPrivate": { "type": "boolean" } }
+                    },
+                    "variables": { "type": "array", "items": { "$ref": "#/$defs/VarRef" } }
+                  }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 21 },
+                "parameters": {
+                  "type": "object", "required": ["url","path","variables"], "additionalProperties": false,
+                  "properties": {
+                    "url": { "type": "string" },
+                    "path": { "type": "string" },
+                    "variables": { "type": "array", "items": { "$ref": "#/$defs/VarRef" } }
+                  }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 22 },
+                "parameters": {
+                  "type": "object", "required": ["message","variables"], "additionalProperties": false,
+                  "properties": {
+                    "message": { "type": "string" },
+                    "variables": { "type": "array", "items": { "$ref": "#/$defs/VarRef" } }
+                  }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 23 },
+                "parameters": {
+                  "type": "object", "required": ["title","message","variables"], "additionalProperties": false,
+                  "properties": {
+                    "title": { "type": "string" },
+                    "message": { "type": "string" },
+                    "variables": { "type": "array", "items": { "$ref": "#/$defs/VarRef" } }
+                  }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 24 },
+                "parameters": {
+                  "type": "object",
+                  "required": ["path","commandLine","executeAsSystem","captureOutput","outputVariable","variables"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "path": { "type": "string" },
+                    "commandLine": { "type": ["string","null"] },
+                    "executeAsSystem": { "type": "boolean" },
+                    "captureOutput": { "type": "boolean" },
+                    "outputVariable": { "type": "string" },
+                    "variables": { "type": "array", "items": { "$ref": "#/$defs/VarRef" } }
+                  }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 25 },
+                "parameters": {
+                  "type": "object", "required": ["applicationName","executeAsSystem"], "additionalProperties": false,
+                  "properties": {
+                    "applicationName": { "type": "string" },
+                    "executeAsSystem": { "type": "boolean" }
+                  }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 26 },
+                "parameters": {
+                  "type": "object", "required": ["type","minutes","dateTime"], "additionalProperties": false,
+                  "properties": {
+                    "type": { "type": "integer", "enum": [0,1] },
+                    "minutes": { "type": "integer", "minimum": 0, "maximum": 59 },
+                    "dateTime": { "type": ["null","string"] }
+                  }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 27 },
+                "parameters": {
+                  "type": "object",
+                  "required": ["commandLine","executeAsSystem","captureOutput","outputVariable","variables"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "commandLine": { "type": "string" },
+                    "executeAsSystem": { "type": "boolean" },
+                    "captureOutput": { "type": "boolean" },
+                    "outputVariable": { "type": "string" },
+                    "variables": { "type": "array", "items": { "$ref": "#/$defs/VarRef" } }
+                  }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 31 },
+                "parameters": {
+                  "type": "object", "required": ["key","registryValueType","is32Bit"], "additionalProperties": false,
+                  "properties": {
+                    "key": { "type": "string" },
+                    "valueName": { "type": ["string","null"] },
+                    "value": { "type": ["string","number","null"] },
+                    "registryValueType": { "type": "integer", "enum": [1,2,3] },
+                    "is32Bit": { "type": "boolean" }
+                  }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 32 },
+                "parameters": {
+                  "type": "object", "required": ["key","is32Bit"], "additionalProperties": false,
+                  "properties": {
+                    "key": { "type": "string" },
+                    "valueName": { "type": ["string","null"] },
+                    "is32Bit": { "type": "boolean" }
+                  }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 33 },
+                "parameters": {
+                  "type": "object", "required": ["sourcePath","targetPath"], "additionalProperties": false,
+                  "properties": {
+                    "sourcePath": { "type": "string" },
+                    "targetPath": { "type": "string" }
+                  }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 34 },
+                "parameters": {
+                  "type": "object", "required": ["path"], "additionalProperties": false,
+                  "properties": { "path": { "type": "string" } }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 35 },
+                "parameters": { "type": "null" }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 36 },
+                "parameters": {
+                  "type": "object",
+                  "required": ["commandLine","executeAsSystem","captureOutput","outputVariable","variables"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "commandLine": { "type": "string" },
+                    "executeAsSystem": { "type": "boolean" },
+                    "captureOutput": { "type": "boolean" },
+                    "outputVariable": { "type": "string" },
+                    "variables": { "type": "array", "items": { "$ref": "#/$defs/VarRef" } }
+                  }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 37 },
+                "parameters": {
+                  "type": "object", "required": ["variableType","variableName"], "additionalProperties": true,
+                  "properties": {
+                    "variableType": { "type": "integer", "minimum": 0, "maximum": 16 },
+                    "variableName": { "type": "string" },
+                    "variables": { "type": "array", "items": { "$ref": "#/$defs/VarRef" } }
+                  }
+                }
+              },
+              "required": ["parameters"]
+            },
+            {
+              "properties": {
+                "actionType": { "const": 38 },
+                "parameters": {
+                  "type": "object",
+                  "required": ["url","payloadMimeType","payload","waitTimeoutMls","variables"],
+                  "additionalProperties": false,
+                  "properties": {
+                    "url": { "type": "string" },
+                    "payloadMimeType": {
+                      "type": "string",
+                      "enum": [
+                        "application/json",
+                        "application/xml",
+                        "text/xml",
+                        "text/html",
+                        "application/x-www-form-urlencoded"
+                      ]
+                    },
+                    "payload": { "type": "string" },
+                    "waitTimeoutMls": { "type": "integer", "minimum": 0 },
+                    "variables": { "type": "array", "items": { "$ref": "#/$defs/VarRef" } }
+                  }
+                }
+              },
+              "required": ["parameters"]
+            }
+          ]
+        }
+      ]
+    },
+
+
+    "TriggerStep": {
+      "oneOf": [
+        { "$ref": "#/$defs/TriggerManual" },
+        { "$ref": "#/$defs/TriggerNotification" },
+        { "$ref": "#/$defs/TriggerScheduleDaily" },
+        { "$ref": "#/$defs/TriggerScheduleWeekly" },
+        { "$ref": "#/$defs/TriggerScheduleMonthly" },
+        { "$ref": "#/$defs/TriggerExternal" }
+      ]
+    },
+
+    "ConditionStep": { "$ref": "#/$defs/Condition" },
+
+    "Step": {
+      "type": "object",
+      "required": ["workflowStepType"],
+      "properties": {
+        "workflowStepType": { "type": "integer", "enum": [0,1,2] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "workflowStepType": { "const": 0 } } },
+          "then": { "$ref": "#/$defs/ActionStep" }
+        },
+        {
+          "if": { "properties": { "workflowStepType": { "const": 1 } } },
+          "then": { "$ref": "#/$defs/TriggerStep" }
+        },
+        {
+          "if": { "properties": { "workflowStepType": { "const": 2 } } },
+          "then": { "$ref": "#/$defs/ConditionStep" }
+        }
+      ]
     }
-  },
-  "additionalProperties": false
+  }
 }

@@ -1,0 +1,40 @@
+provider: bedrock
+
+openai:
+  model: gpt-4o-mini
+  max_tokens: 4096
+bedrock:
+  model: global.anthropic.claude-sonnet-4-20250514-v1:0
+  region: us-east-1
+  max_tokens: 4096
+hf:
+  endpoint_url: http://localhost:8080/v1/chat/completions
+  model: llama-3-70b-instruct
+  max_tokens: 2048
+
+generation:
+  temperature: 0.2
+  top_p: 0.9
+  paraphrase_temperature: 0.5
+  paraphrase_top_p: 0.9
+
+targets:
+  target_count: 300
+  max_paraphrases_per_seed: 2
+
+paths:
+  seed_dir: seeds/wfl_templates
+  contracts_dir: data/schema
+  out_dir: data/synth_r1
+  schema: data/schema/wfl.schema.json
+  catalog: data/schema/action_catalog.json
+
+debug:
+  level: INFO
+  sample_every: 1         # print every N items (keep small at first)
+  flush_every: 10         # fsync every N writes to JSONL
+  save_raw_generations: true
+  out_dir_debug: datasets/synth_r1/_debug
+
+limits:
+  max_repair_attempts: 1
