@@ -62,7 +62,8 @@ def main():
     # 1) seed pairs
     for s in seeds:
         req = verbalize_seed(s)
-        pool.append({"input": req, "output": s})
+        # do not inlude seeds to dataset for testing
+        # pool.append({"input": req, "output": s})
 
     # counters
     paraphrase_total = 0

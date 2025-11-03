@@ -117,9 +117,9 @@ def build_data_block(output: Dict[str, Any], keep_template_defaults: Dict[str, A
     data["Steps"] = steps
 
     # Optionally carry over common metadata fields if present; otherwise keep template defaults
-    for key in ("Name", "Description", "Scope", "Schedule", "Timeout", "Version"):
-        if key in output and output[key] is not None:
-            data[key] = output[key]
+    # for key in ("Name", "Description", "Scope", "Schedule", "Timeout", "Version"):
+    #     if key in output and output[key] is not None:
+    #         data[key] = output[key]
 
     return data
 

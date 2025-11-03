@@ -13,6 +13,11 @@ OUTPUT CONTRACT
   * Condition: {"workflowStepType":2,...}
 - Allowed actionType set: {1,2,9,14,15,19,20,21,22,23,24,25,26,27,31,32,33,34,35,36,37,38}. Never use anything else.
 - If you use actionType=15 (End Workflow), it MUST be the LAST step of its branch.
+                        
+IDs & ORDERING
+- Every step MUST have an "id" that is a 13-digit integer (timestamp-like) or a digits-only string (no letters). All step ids MUST be unique across the entire workflow (including branches).
+- In ALL rules, set "workflowStepId" to the TRIGGER step id.
+- Variable producers MUST appear before any consumer that references them within the same execution path/branch. Do NOT forward-reference variables.
 
 TRIGGERS (exact shapes)
 1) Manual:
@@ -63,23 +68,24 @@ CONDITIONS:
   "workflowStepType":2, "displayName":"...", "ruleAggregation":0|1,
   "rules":[ Rule, ... ],                 // MUST be non-empty
   "positiveOutcome":[ Step, ... ],
-  "negativeOutcome":[ Step, ... ]
+  "negativeOutcome":[ Step, ... ],
+  "id": <id>
 }
-- Only three valid Rule shapes:
+- Only three valid Rule shapes (workflowStepId MUST equal the TRIGGER id):
 
 OS type rule:
-{ "propertyId":"oSType", "operator":2, "value":1|2|3, "workflowStepId": <id or 1> }   // 1=Windows,2=Linux,3=macOS
+{ "propertyId":"oSType", "operator":2, "value":1|2|3, "workflowStepId": <triggerId> }   // 1=Windows,2=Linux,3=macOS
 
 Scope rule (scopeId must match scopeName):
 { "propertyId":"scope","operator":2,"scopeName":"All Windows 11 Computers" | "All Windows 10 Computers" |
                                  "All Windows Computers" | "All Windows Servers" |
                                  "All Windows Server 2012" | "All Windows Server 2016" |
                                  "All Windows Server 2019" | "All Windows Server 2022" | "All Windows Server 2025",
-  "scopeId": -15|-14|-13|-12|-8|-9|-10|-11|-16, "computerIds":[], "workflowStepId": <id or 1> }
+  "scopeId": -15|-14|-13|-12|-8|-9|-10|-11|-16, "computerIds":[], "workflowStepId": <triggerId> }
 
 Variable rule (variablesType: 0=Text, 1=Number, 2=Boolean, 9=DateTime):
 { "propertyId":"Variable","operator":0..12,"variablesId":"<producerVariableName>",
-  "variablesType":0|1|2|9,"value":<string|number|boolean|date-string>,"workflowStepId": <id or 1> }
+  "variablesType":0|1|2|9,"value":<string|number|boolean|date-string>,"workflowStepId": <triggerId> }
 
 - If no test is needed, OMIT the Condition entirely. DO NOT emit empty "rules":[ ].
 
@@ -115,11 +121,18 @@ VARIABLES (production & references)
     - Number: 11
     - DateTime: 8
     - Text: 6,10,12,13,14,15
-- Referencing inside action parameter strings: use placeholder form "#<variableId>". For each placeholder, include a matching VarRef in parameters.variables:
+- Referencing inside action parameter strings: use placeholder form "#<variableId>". For each placeholder, include ONE matching VarRef in parameters.variables:
   VarRef = {"variableId":"<digits>","propertyId":"variable","workflowStepId":0,"sourceId":"<producerVariableName>","displayName":"<producerVariableName>","type":0|1|2|3,"workflowStepName":"Variable"}
   (type codes here: 0=Boolean, 1=Number, 2=Text, 3=DateTime). Use unique, realistic numeric "variableId" (e.g., a 13-digit timestamp-like number).
-- In Condition Variable rules, reference by variablesId = producerVariableName and set variablesType correctly (0=Text,1=Number,2=Boolean,9=DateTime).
 - Do NOT reference variables that were not produced earlier in the execution path.
+- Do NOT include pseudo/system fields (e.g., "systemName","organization") in variables arrays. Only VarRef as above, and only for variables produced earlier in-path.
+                        
+WINDOWS-DEFAULT SCOPE
+- Default to Windows. If you gate by OS, create a single Windows check. For non-Windows, just log a message then End Workflow (status=2). Do NOT build nested Linux/macOS branches unless explicitly requested.
+
+STRINGS & ESCAPING HYGIENE
+- Use plain ASCII quotes and backslashes. Escape JSON correctly.
+- Do NOT emit zero-width or smart characters (e.g., U+200B). No hidden characters around placeholders.
 
 STRICTNESS & STYLE
 - Never output comments, trailing commas, extra keys, or empty arrays where the schema forbids them.
@@ -163,6 +176,8 @@ Candidate JSON:
 Validation errors:
 {errors}
 
+Before emitting, ensure:
+- [ ] trigger is step 0 and unique, all steps have id, no forbidden keys, all refs/resolved.
 Return corrected JSON ONLY.
 """
 

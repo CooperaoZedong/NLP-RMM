@@ -25,8 +25,54 @@
     "Timeout": { "type": ["integer", "null"] },
     "Version": { "type": ["integer", "null"] }
   },
+  "allOf": [
+    { "$ref": "#/$defs/DeepRefs" }
+  ],
   "$defs": {
-    "Id": { "type": ["integer","string"] },
+    "IdInteger": {
+      "type": "integer",
+      "maximum": 9223372036854775807
+    },
+    "IdNumericString": {
+      "type": "string",
+      "pattern": "^(0|[1-9][0-9]{0,18})$"
+    },
+    "Id": { 
+      "oneOf": [
+        { "$ref": "#/$defs/IdInteger" },
+        { "$ref": "#/$defs/IdNumericString" }
+      ]
+    },
+
+    "PredefinedScopes": {
+      "type": "string",
+      "enum": [
+        "All Systems",
+        "All Linux Computers",
+        "All MacOS Computers",
+        "All Network Devices",
+        "All API",
+        "All Cloud",
+        "All Windows Server 2012",
+        "All Windows Server 2016",
+        "All Windows Server 2019",
+        "All Windows Server 2022",
+        "All Windows Server 2025",
+        "All Windows Servers",
+        "All Windows Computers",
+        "All Windows 10 Computers",
+        "All Windows 11 Computers"
+      ]
+    },
+
+    "PackageTagsEnum":          { "type": "string", "enum": [] },
+    "PackageScopesEnum":        { "type": "string", "enum": [] },
+    "PackageScriptsEnum":       { "type": "string", "enum": [] },
+    "PackageTasksEnum":         { "type": "string", "enum": [] },
+    "PackageManagedFilesEnum":  { "type": "string", "enum": [] },
+    "PackageCustomFieldsEnum":  { "type": "string", "enum": [] },
+    "PackageWorkflowsEnum":     { "type": "string", "enum": [] },
+
     "VarRef": {
       "type": "object",
       "required": ["variableId","propertyId","workflowStepId","sourceId","displayName","type","workflowStepName"],
@@ -61,10 +107,11 @@
       "allOf": [
         { "$ref": "#/$defs/TriggerBase" },
         { "type": "object",
-          "required": ["skipOffline","triggerSubType"],
+          "required": ["skipOffline","triggerSubType","displayName"],
           "properties": {
             "triggerType": { "const": 2 },
             "triggerSubType": { "const": "Manual" },
+            "displayName": { "const": "Ad-hoc" },
             "notificationType": { "type": "null" }
           }
         }
@@ -75,9 +122,10 @@
       "allOf": [
         { "$ref": "#/$defs/TriggerBase" },
         { "type": "object",
-          "required": ["skipOffline","notificationType","triggerSubType"],
+          "required": ["skipOffline","notificationType","triggerSubType","displayName"],
           "properties": {
             "triggerType": { "const": 0 },
+            "displayName": { "const": "Notification" },
             "notificationType": {
               "type": "string",
               "enum": [
@@ -125,10 +173,11 @@
       "allOf": [
         { "$ref": "#/$defs/TriggerBase" },
         { "type": "object",
-          "required": ["skipOffline","triggerSubType","schedule"],
+          "required": ["skipOffline","triggerSubType","schedule","displayName"],
           "properties": {
             "triggerType": { "const": 2 },
             "triggerSubType": { "const": "Scheduled" },
+            "displayName": { "const": "Scheduled daily" },
             "schedule": {
               "allOf": [
                 { "$ref": "#/$defs/ScheduleCommon" },
@@ -152,10 +201,11 @@
       "allOf": [
         { "$ref": "#/$defs/TriggerBase" },
         { "type": "object",
-          "required": ["skipOffline","triggerSubType","schedule"],
+          "required": ["skipOffline","triggerSubType","schedule","displayName"],
           "properties": {
             "triggerType": { "const": 2 },
             "triggerSubType": { "const": "Scheduled" },
+            "displayName": { "const": "Scheduled weekly" },
             "schedule": {
               "allOf": [
                 { "$ref": "#/$defs/ScheduleCommon" },
@@ -179,10 +229,11 @@
       "allOf": [
         { "$ref": "#/$defs/TriggerBase" },
         { "type": "object",
-          "required": ["skipOffline","triggerSubType","schedule"],
+          "required": ["skipOffline","triggerSubType","schedule","displayName"],
           "properties": {
             "triggerType": { "const": 2 },
             "triggerSubType": { "const": "Scheduled" },
+            "displayName": { "const": "Scheduled monthly" },
             "schedule": {
               "allOf": [
                 { "$ref": "#/$defs/ScheduleCommon" },
@@ -225,9 +276,20 @@
         "operator": { "type": "integer", "enum": [2] },
         "scopeName": { "type": "string" },
         "scopeId": { "type": "integer" },
-        "computerIds": { "type": "array" },
+        "computerIds": { "type": "array", "items": { "type": "integer" } },
         "workflowStepId": { "$ref": "#/$defs/Id" }
-      }
+      },
+      "anyOf": [
+        { "properties": { "scopeName": { "const": "All Windows 11 Computers" }, "scopeId": { "const": -15 } } },
+        { "properties": { "scopeName": { "const": "All Windows 10 Computers" }, "scopeId": { "const": -14 } } },
+        { "properties": { "scopeName": { "const": "All Windows Computers"   }, "scopeId": { "const": -13 } } },
+        { "properties": { "scopeName": { "const": "All Windows Servers"     }, "scopeId": { "const": -12 } } },
+        { "properties": { "scopeName": { "const": "All Windows Server 2012" }, "scopeId": { "const":  -8 } } },
+        { "properties": { "scopeName": { "const": "All Windows Server 2016" }, "scopeId": { "const":  -9 } } },
+        { "properties": { "scopeName": { "const": "All Windows Server 2019" }, "scopeId": { "const": -10 } } },
+        { "properties": { "scopeName": { "const": "All Windows Server 2022" }, "scopeId": { "const": -11 } } },
+        { "properties": { "scopeName": { "const": "All Windows Server 2025" }, "scopeId": { "const": -16 } } }
+      ]
     },
 
     "RuleOSType": {
@@ -253,7 +315,13 @@
         "variablesType": { "type": "integer", "enum": [0,1,2,9] },
         "value": { "type": ["string","number","boolean","null"] },
         "workflowStepId": { "$ref": "#/$defs/Id" }
-      }
+      },
+      "allOf": [
+        { "if": { "properties": { "variablesType": { "const": 0 } } }, "then": { "properties": { "value": { "type": "string" } } } },
+        { "if": { "properties": { "variablesType": { "const": 1 } } }, "then": { "properties": { "value": { "type": "number" } } } },
+        { "if": { "properties": { "variablesType": { "const": 2 } } }, "then": { "properties": { "value": { "type": "boolean" } } } },
+        { "if": { "properties": { "variablesType": { "const": 9 } } }, "then": { "properties": { "value": { "type": "string", "format": "date-time" } } } }
+      ]
     },
 
     "Condition": {
@@ -267,8 +335,8 @@
         "rules": { "type": "array", "minItems": 1, "items": { "oneOf": [
           { "$ref": "#/$defs/RuleScope" }, { "$ref": "#/$defs/RuleOSType" }, { "$ref": "#/$defs/RuleVariable" }
         ]}},
-        "positiveOutcome": { "type": "array", "items": { "$ref": "#/$defs/Step" } },
-        "negativeOutcome": { "type": "array", "items": { "$ref": "#/$defs/Step" } },
+        "positiveOutcome": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/NonTriggerStep" } },
+        "negativeOutcome": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/NonTriggerStep" } },
         "id": { "$ref": "#/$defs/Id" }
       }
     },
@@ -649,6 +717,48 @@
           "if": { "properties": { "workflowStepType": { "const": 2 } } },
           "then": { "$ref": "#/$defs/ConditionStep" }
         }
+      ]
+    },
+
+    "NonTriggerStep": {
+      "allOf": [
+        { "$ref": "#/$defs/Step" },
+        { "not": { "$ref": "#/$defs/TriggerStep" } }
+      ]
+    },
+
+    "DeepRefs": {
+      "anyOf": [
+        {
+          "type": "array",
+          "items": { "$recursiveRef": "#/$defs/DeepRefs" }
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tags": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/PackageTagsEnum" }
+            },
+            "customFieldName": { "$ref": "#/$defs/PackageCustomFieldsEnum" },
+            "customFieldType": {
+              "type": "string",
+              "pattern": "^-?\\d+$"
+            },
+            "scopeName": {
+              "anyOf": [
+                { "$ref": "#/$defs/PredefinedScopes" },
+                { "$ref": "#/$defs/PackageScopesEnum" }
+              ]
+            },
+            "scriptName":       { "$ref": "#/$defs/PackageScriptsEnum" },
+            "taskName":         { "$ref": "#/$defs/PackageTasksEnum" },
+            "managedFileName":  { "$ref": "#/$defs/PackageManagedFilesEnum" },
+            "workflowName":     { "$ref": "#/$defs/PackageWorkflowsEnum" }
+          },
+          "additionalProperties": { "$recursiveRef": "#/$defs/DeepRefs" }
+        },
+        { "type": ["string","number","boolean","null"] }
       ]
     }
   }

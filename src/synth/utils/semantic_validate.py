@@ -1,10 +1,24 @@
 from typing import Dict, Any, List, Set
 from datetime import datetime, timezone
+import copy
 import re
 
 from synth.utils.contracts import NOTIFICATION_TYPES, SCOPE_MAP, ALLOWED_ACTION_TYPES
 
 DATE_ISO_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$")
+MAX_INT64 = (1 << 63) - 1
+ID_STR_RE = re.compile(r"^(0|[1-9][0-9]{0,18})$")
+PLACEHOLDER_RE = re.compile(r"#([0-9]{6,})")
+EMAIL_HINT_RE = re.compile(r".+@.+\..+")
+NOT_ALLOWED_RULE_PROPERTY_IDS = {"organization","site","agentGroup","system","SNMPVariable"}
+ALLOWED_RULE_PROPERTY_IDS = {"oSType","scope","Variable"}
+
+_VAR_TYPEMAP = {
+    0:0,1:0,2:0,3:0,4:0,5:0,7:0,9:0,16:0,  # Booleans
+    11:1,                                  # Number
+    6:2,10:2,12:2,13:2,14:2,15:2,          # Text
+    8:3                                    # DateTime
+}
 
 def _is_trigger(step: Dict[str, Any]) -> bool:
     return step.get("workflowStepType") == 1
@@ -190,6 +204,211 @@ def _validate_rules_operators(seq: List[Dict[str, Any]]):
                     if sid is not None:
                         assert sid == SCOPE_MAP[name], f"scopeId {sid} does not match scopeName '{name}'"
 
+def _get_steps_array(wf: Dict[str, Any]) -> List[Dict[str, Any]]:
+    if isinstance(wf.get("workflowSteps"), list):
+        return wf["workflowSteps"]
+    raise AssertionError("Root must contain an array under 'workflowSteps'")
+
+def _as_int64_id(v, where: str):
+    if isinstance(v, int):
+        n = v
+    elif isinstance(v, str) and ID_STR_RE.match(v):
+        n = int(v)
+    else:
+        raise AssertionError(f"{where}: id must be an integer or numeric string (0..{MAX_INT64})")
+    if not (0 <= n <= MAX_INT64):
+        raise AssertionError(f"{where}: id must be within 0..{MAX_INT64}")
+    return n
+
+def _validate_ids_castable(seq: List[Dict[str, Any]]):
+    for s in _walk_sequences(seq):
+        # step id
+        if "id" in s:
+            _as_int64_id(s["id"], "step.id")
+        # condition rules ids
+        if _is_condition(s):
+            for r in (s.get("rules") or []):
+                if "workflowStepId" in r:
+                    _as_int64_id(r["workflowStepId"], "rule.workflowStepId")
+        # VarRef workflowStepId + variableId pattern
+        if _is_action(s):
+            p = s.get("parameters") or {}
+            for v in p.get("variables") or []:
+                if "workflowStepId" in v:
+                    _as_int64_id(v["workflowStepId"], "VarRef.workflowStepId")
+                vid = v.get("variableId")
+                if not (isinstance(vid, str) and PLACEHOLDER_RE.fullmatch("#" + vid)):
+                    raise AssertionError("VarRef.variableId must be a digit string of length ≥ 6")
+
+def _validate_disallowed_rule_properties(seq: List[Dict[str, Any]]):
+    for s in _walk_sequences(seq):
+        if _is_condition(s):
+            for r in (s.get("rules") or []):
+                pid = r.get("propertyId")
+                if pid not in ALLOWED_RULE_PROPERTY_IDS:
+                    raise AssertionError(f"Disallowed rule propertyId '{pid}' (allowed: {sorted(ALLOWED_RULE_PROPERTY_IDS)})")
+
+def _scan_placeholders_in(obj) -> Set[str]:
+    out = set()
+    if isinstance(obj, str):
+        out |= set(PLACEHOLDER_RE.findall(obj))
+    elif isinstance(obj, list):
+        for x in obj: out |= _scan_placeholders_in(x)
+    elif isinstance(obj, dict):
+        for x in obj.values(): out |= _scan_placeholders_in(x)
+    return out
+
+def _produce_vars_from_action(s: Dict[str, Any], seen_types: Dict[str,int]):
+    """Mutates seen_types when an action produces a variable."""
+    if not _is_action(s):
+        return
+    at = s.get("actionType")
+    p  = s.get("parameters") or {}
+    if at in (24,27,36):
+        if p.get("captureOutput") and p.get("outputVariable"):
+            name = p["outputVariable"]
+            if name in seen_types:
+                raise AssertionError(f"Variable '{name}' is produced more than once")
+            seen_types[name] = 2  # Text
+    elif at == 37:
+        vname = p.get("variableName")
+        vtype = p.get("variableType")
+        if isinstance(vname, str) and vname:
+            if vname in seen_types:
+                raise AssertionError(f"Variable '{vname}' is produced more than once")
+            seen_types[vname] = _VAR_TYPEMAP.get(vtype, 2)
+
+def _validate_action_varrefs_in_scope(s: Dict[str, Any], seen_types: Dict[str,int]):
+    if not _is_action(s):
+        return
+    p = s.get("parameters") or {}
+    placeholders = _scan_placeholders_in(p)
+    vars_arr = p.get("variables") or []
+
+    # 1) placeholders must be covered by VarRefs
+    ids_in_vars = { v.get("variableId") for v in vars_arr if isinstance(v, dict) }
+    if placeholders - ids_in_vars:
+        missing = sorted(placeholders - ids_in_vars)
+        raise AssertionError(f"Missing variable references for ids: {missing}")
+
+    # 2) VarRefs must point to variables produced *so far on this path*
+    for v in vars_arr:
+        src = v.get("sourceId")
+        if src not in seen_types:
+            raise AssertionError(f"VarRef.sourceId '{src}' not produced yet in this branch")
+        # 3) Optional: type compatibility (0=Bool,1=Num,2=Text,3=DateTime)
+        vt_expected = seen_types[src]
+        vt_given = v.get("type")
+        if vt_given not in (0,1,2,3):
+            raise AssertionError(f"VarRef.type for '{src}' must be 0..3")
+        if vt_expected != vt_given:
+            raise AssertionError(f"VarRef.type mismatch for '{src}': expected {vt_expected}, got {vt_given}")
+
+    # 4) Email sanity (actionType=9)
+    if s.get("actionType") == 9:
+        for addr in p.get("recipients") or []:
+            if not isinstance(addr, str) or "@" not in addr:
+                raise AssertionError(f"Invalid email recipient: {addr}")
+        for v in p.get("variableRecipients") or []:
+            src = v.get("sourceId")
+            if seen_types.get(src) != 2:
+                raise AssertionError(f"variableRecipients must reference Text variables; '{src}' is not Text")
+
+def _validate_rules_in_scope(s: Dict[str, Any], seen_types: Dict[str,int]):
+    if not _is_condition(s):
+        return
+    for r in (s.get("rules") or []):
+        pid = r.get("propertyId")
+        op  = r.get("operator")
+        if not (isinstance(op, int) and 0 <= op <= 12):
+            raise AssertionError("operator must be 0..12")
+        if pid == "oSType":
+            if r.get("value") not in (1,2,3):
+                raise AssertionError("oSType value must be 1,2,3")
+        elif pid == "scope":
+            name = r.get("scopeName"); sid = r.get("scopeId")
+            assert name in SCOPE_MAP, f"Unknown scopeName '{name}'"
+            if sid is not None:
+                assert sid == SCOPE_MAP[name], f"scopeId {sid} does not match scopeName '{name}'"
+        elif pid == "Variable":
+            vname = r.get("variablesId")
+            if vname not in seen_types:
+                raise AssertionError(f"Rule references variable '{vname}' before it is produced on this branch")
+
+def _validate_pathwise(seq: List[Dict[str, Any]], seen_types: Dict[str,int]):
+    """
+    Enforce path-ordered semantics:
+      - VarRefs & Variable rules may only use variables produced SO FAR on the same branch.
+      - After each action, newly-produced variables become available downstream.
+    """
+    for s in seq:
+        # check usage against current scope
+        _validate_action_varrefs_in_scope(s, seen_types)
+        _validate_rules_in_scope(s, seen_types)
+        # branch recursion with copies of current scope
+        if _is_condition(s):
+            pos = s.get("positiveOutcome", []) or []
+            neg = s.get("negativeOutcome", []) or []
+            _validate_pathwise(pos, copy.deepcopy(seen_types))
+            _validate_pathwise(neg, copy.deepcopy(seen_types))
+        # after validation, record any newly produced variables for subsequent siblings
+        _produce_vars_from_action(s, seen_types)
+
+def _validate_variables_links_pathwise(seq: List[Dict[str, Any]]):
+    # Also keep global uniqueness of *names*
+    all_names: Set[str] = set()
+    def collect_names(s):
+        if _is_action(s):
+            p = s.get("parameters") or {}
+            if s.get("actionType") in (24,27,36):
+                if p.get("captureOutput") and p.get("outputVariable"):
+                    all_names.add(p["outputVariable"])
+            elif s.get("actionType") == 37 and isinstance(p.get("variableName"), str):
+                all_names.add(p["variableName"])
+    for s in _walk_sequences(seq): collect_names(s)
+    if len(all_names) != len(set(all_names)):
+        raise AssertionError("Variable names must be unique within workflow")
+
+    # Now pathwise validation
+    _validate_pathwise(seq, seen_types={})
+
+def _produced_before_along_path(seq, upto_id):
+    produced = set()
+    def walk(branch):
+        nonlocal produced
+        for s in branch:
+            if s.get("id") == upto_id:
+                return True
+            if _is_action(s):
+                at = s.get("actionType"); p = (s.get("parameters") or {})
+                if at in (24,27,36) and p.get("captureOutput") and p.get("outputVariable"):
+                    produced.add(p["outputVariable"])
+                elif at == 37 and isinstance(p.get("variableName"), str):
+                    produced.add(p["variableName"])
+            if _is_condition(s):
+                if walk(p := s.get("positiveOutcome") or []): return True
+                if walk(n := s.get("negativeOutcome") or []): return True
+        return False
+
+    walk(seq)
+    return produced
+
+def _validate_variable_rule_order(seq):
+    for s in _walk_sequences(seq):
+        if _is_condition(s):
+            before = _produced_before_along_path(seq, s.get("id"))
+            for r in (s.get("rules") or []):
+                if r.get("propertyId") == "Variable":
+                    vname = r.get("variablesId")
+                    assert vname in before, f"Condition {s.get('displayName')} uses variable '{vname}' before it is produced in this path"
+
+def _validate_rule_property_ids(seq):
+    for s in _walk_sequences(seq):
+        if _is_condition(s):
+            for r in s.get("rules") or []:
+                pid = r.get("propertyId")
+                assert pid not in NOT_ALLOWED_RULE_PROPERTY_IDS, f"Not allowed rule propertyId '{pid}'"
+
 def semantic_validate_workflow(wf: Dict[str, Any]):
     steps = wf.get("workflowSteps", [])
     _validate_trigger_first_only(wf)
@@ -200,6 +419,12 @@ def semantic_validate_workflow(wf: Dict[str, Any]):
     # Actions & rules
     _validate_actions(steps)
     _validate_rules_operators(steps)
-    # Variables linkages
-    _validate_variables_links(steps)
 
+    _validate_rules_operators(steps)
+    _validate_disallowed_rule_properties(steps)
+
+    _validate_ids_castable(steps)
+    _validate_variable_rule_order(steps)
+
+    # Variables linkages
+    _validate_variables_links_pathwise(steps)
