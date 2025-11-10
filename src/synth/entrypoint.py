@@ -59,6 +59,7 @@ def main():
     evt_sink  = JsonlSink((debug_dir / "events.jsonl").as_posix(), flush_every)
 
     pool = []
+    pairs = []
     # 1) seed pairs
     for s in seeds:
         req = verbalize_seed(s)
@@ -93,9 +94,10 @@ def main():
                     max_repair_attempts=int(limits.get("max_repair_attempts", 1)),
                     debug_sink=evt_sink if save_raw else None
                 )
-                pool.append({"input": pr, "output": out})
+                pairs.append({"prompt": pr, "chosen": out["chosen"], "rejected": out["rejected"], "reason": out["reason"]})
+                pool.append({"input": pr, "output": out["chosen"]})
                 compile_ok += 1
-                ok_sink.write({"input": pr, "output": out})
+                ok_sink.write({"input": pr, "output": out["chosen"], "rejected": out["rejected"], "reason": out["reason"]})
             except Exception as e:
                 compile_fail += 1
                 raw_prev = getattr(e, "raw", None)
@@ -122,13 +124,15 @@ def main():
     # 4) split & write
     out_dir = pathlib.Path(paths["out_dir"]); out_dir.mkdir(parents=True, exist_ok=True)
     random.shuffle(pool)
+    random.shuffle(pairs)
     n=len(pool); val_n = max(min(200, n//20), 100)
     train, val = pool[val_n:], pool[:val_n]
     (out_dir/"train.jsonl").write_text("\n".join(json.dumps(x, ensure_ascii=False) for x in train), encoding="utf-8")
     (out_dir/"val.jsonl").write_text("\n".join(json.dumps(x, ensure_ascii=False) for x in val), encoding="utf-8")
+    (out_dir/"pairs.jsonl").write_text("\n".join(json.dumps(x, ensure_ascii=False) for x in pairs), encoding="utf-8")
 
     elapsed = time.time() - start
-    LOG.info("DONE wrote %d train / %d val to %s in %.1fs", len(train), len(val), out_dir, elapsed)
+    LOG.info("DONE wrote %d train / %d val, %d DPO pairs to %s in %.1fs", len(train), len(val), len(pairs), out_dir, elapsed)
     LOG.info("STATS paraphrases=%d compile_ok=%d compile_fail=%d", paraphrase_total, compile_ok, compile_fail)
     LOG.info("STATS repair_ok=%d repair_fail=%d", repair_ok, repair_fail)
 

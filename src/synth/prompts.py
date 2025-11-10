@@ -149,6 +149,32 @@ SYSTEM_PARAPHRASE = (
     "Keep meaning. One sentence only."
 )
 
+SYSTEM_SABOTAGER = dedent("""
+You are a workflow planner for an RMM platform.
+Return a MINIMAL, STRICTLY VALID .wfl JSON ONLY. No explanations, no comments.
+
+Follow this notation EXACTLY:
+- Top-level key: "workflowSteps": [ ... ]
+- First and only TRIGGER is step 0 (workflowStepType=1):
+  * Manual: triggerType=2, triggerSubType="Manual", no notificationType
+  * Notification: triggerType=0, notificationType in the allow-list; triggerSubType == notificationType
+  * Scheduled: triggerType=2, triggerSubType="Scheduled", schedule object (see details below)
+  * External: triggerType=1, triggerSubType non-empty, no notificationType
+- After the trigger: a sequence of ACTIONs (workflowStepType=0) and optional CONDITIONs (workflowStepType=2).
+- If actionType=15 (End Workflow), it MUST be the LAST step in that branch.
+
+ACTION allow-list (numeric actionType): 1,2,9,14,15,19,20,21,22,23,24,25,26,31,32,33,34,35,36,37,38.
+
+Notification allow-list (notificationType): SERVICE_STOP,SERVICE_MISSED,USER_LOGGED_IN,USER_LOGGED_OUT,LOW_MEMORY,HIGH_CPU_USAGE,HIGH_PING_TIME,PING_ERROR,LOW_HDD_FREE_SPACE,COMPUTER_OFFLINE,COMPUTER_BACK_ONLINE,PORT_NOT_AVAILABLE,EVENT_LOG_WATCH,REBOOT_REQUIRED,LOW_BATTERY,WINDOWS_UPDATES_AVAILABLE,PROCESS_STARTED,PROCESS_STOPPED,PERFORMANCE_COUNTER,APPLICATIONS_ADDED,USB_DEVICE_INSERT,USB_DEVICE_REMOVE,IP_CHANGED,USER_SUPPORT_REQUEST,WEB_SITE_ERROR,SNMP_ALERT,SECURITY_FIREWALL_DISABLED,SECURITY_ANTIVIRUS_DISABLED,HDD_SMART_FAILURE,ANTIVIRUS_DEFINITIONS_OUTDATED,COMPUTER_REGISTERED.
+
+Scheduled trigger forms:
+- Daily: schedule.frequencyInterval {uuid:1,id:1,text:"Daily"}, frequencySubinterval=0
+- Weekly: frequencyInterval {uuid:4,id:2,text:"Weekly"}, frequencySubinterval is bitmask 1..127 (Mon=1, Tue=2, Wed=4, Thu=8, Fri=16, Sat=32, Sun=64)
+- Monthly: frequencyInterval {uuid:5,id:3,text:"Monthly"}, frequencySubinterval in [0,128,256]
+
+Use ISO UTC for schedule.startDate like "YYYY-MM-DDTHH:MM:SS.mmmZ".
+""")
+
 USER_COMPILE_TMPL = """Specification (excerpt):
 - Root key "workflowSteps" (array). First and only step 0 is a TRIGGER; then ACTIONs/CONDITIONs.
 - Use only actionType in [1,2,9,14,15,19,20,21,22,23,24,25,26,27,31,32,33,34,35,36,37,38].
@@ -182,6 +208,17 @@ Return corrected JSON ONLY.
 """
 
 USER_PARAPHRASE_TMPL = "{seed_text}"
+
+USER_SABOTAGER_TMPL = """Generate a proper RMM automation workflow in JSON format.
+
+Few-shots:
+{fewshots}
+
+User request:
+{request}
+
+Return JSON only, wrapped between <json> and </json>.
+"""
 
 FEWSHOTS_TEXT = """
 <example>
