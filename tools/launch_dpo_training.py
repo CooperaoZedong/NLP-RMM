@@ -27,7 +27,7 @@ def launch_dpo_training(
 
     # --- Terraform "locals" recreation -------------------------------------
     s3_code       = f"s3://{s3_bucket}/{s3_code_prefix}/src.tar.gz"
-    s3_pairs  = f"s3://{s3_bucket}/{s3_data_prefix}/sft/pairs.jsonl"
+    s3_pairs  = f"s3://{s3_bucket}/{s3_data_prefix}/dpo/pairs.jsonl"
     s3_output_dpo = f"s3://{s3_bucket}/outputs/dpo"
 
     # make job name unique to avoid "already exists" errors

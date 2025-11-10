@@ -132,15 +132,15 @@ def launch_sft_training(
 if __name__ == "__main__":
     # Example usage: fill these from env/config/CLI
     training_job = launch_sft_training(
-        project="my-project",
-        region="us-east-1",
-        s3_bucket="my-bucket",
+        project="nlp-rmm",
+        region="eu-west-1",
+        s3_bucket="nlp-rmm-artifacts",
         s3_code_prefix="code",
         s3_data_prefix="data",
-        role_arn="arn:aws:iam::123456789012:role/sagemaker-exec-role",
+        role_arn="arn:aws:iam::195275653465:role/nlp-rmm-sagemaker-exec",
         sft_instance_type="ml.g5.2xlarge",
         base_model_id="meta-llama/Llama-3-8B-Instruct",
-        huggingface_dlc_image_uri="763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-training:2.8.0-transformers4.56.2-gpu-py312-cu129-ubuntu22.04",
-        tags={"Project": "my-project", "Stage": "train"},
+        huggingface_dlc_image_uri="763104351884.dkr.ecr.eu-west-1.amazonaws.com/huggingface-pytorch-training:2.8.0-transformers4.56.2-gpu-py312-cu129-ubuntu22.04",
+        tags={"Project": "nlp-rmm", "Stage": "train"},
     )
     print("Launched:", training_job)
