@@ -39,7 +39,8 @@ def launch_sft_training(
 
     # --- Hyperparameters (string -> string) --------------------------------
     hyperparameters = {
-        "s3_code": s3_code,
+        "sagemaker_submit_directory": s3_code,
+        "sagemaker_program": "training/sft/train_sft.py",
         "base_model_id": base_model_id,
         "hf_token": hf_token,
         "per_device_train_batch_size": "4",
@@ -90,6 +91,10 @@ def launch_sft_training(
             {
                 "Name": "eval/pass_rate",
                 "Regex": "eval_pass_rate=(.*)",
+            },
+            {
+                "Name": "eval/perplexity",
+                "Regex": "eval_perplexity=(.*)"
             }
         ],
     }
@@ -139,7 +144,7 @@ if __name__ == "__main__":
         s3_data_prefix="data",
         role_arn="arn:aws:iam::195275653465:role/nlp-rmm-sagemaker-exec",
         sft_instance_type="ml.g5.2xlarge",
-        base_model_id="meta-llama/Llama-3-8B-Instruct",
+        base_model_id="meta-llama/Llama-3.2-3B-Instruct",
         huggingface_dlc_image_uri="763104351884.dkr.ecr.eu-west-1.amazonaws.com/huggingface-pytorch-training:2.8.0-transformers4.56.2-gpu-py312-cu129-ubuntu22.04",
         tags={"Project": "nlp-rmm", "Stage": "train"},
     )

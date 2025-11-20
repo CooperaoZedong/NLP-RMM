@@ -38,7 +38,8 @@ def launch_dpo_training(
 
     # --- Hyperparameters (string -> string) --------------------------------
     hyperparameters = {
-        "s3_code": s3_code,
+        "sagemaker_submit_directory": s3_code,
+        "sagemaker_program": "training/dpo/train_dpo.py",
         "base_model_id": base_model_id,
         "hf_token": hf_token,
         "per_device_train_batch_size": "2",
@@ -70,8 +71,12 @@ def launch_dpo_training(
         "TrainingInputMode": "File",
         "MetricDefinitions": [
             {
-                "Name": "eval/pass_rate",
-                "Regex": "eval_pass_rate=(.*)",
+                "Name": "dpo/train_loss",
+                "Regex": "dpo_train_loss=(.*)",
+            },
+            {
+                "Name": "dpo/eval_loss",
+                "Regex": "dpo_eval_loss=(.*)",
             }
         ],
     }

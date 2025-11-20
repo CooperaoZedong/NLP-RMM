@@ -2,7 +2,7 @@ import argparse, os
 from transformers import AutoTokenizer, AutoModelForCausalLM
 from trl import DPOTrainer, DPOConfig
 from peft import LoraConfig, get_peft_model
-from .dataset_dpo import load_pairs
+from training.dataset_dpo import load_pairs
 
 def get_args():
     p = argparse.ArgumentParser()
@@ -42,8 +42,19 @@ def main():
         max_length=2048,
         max_target_length=1024
     )
-    trainer.train()
+    train_result = trainer.train()
     trainer.save_model(a.output_dir)
+
+    metrics = train_result.metrics
+    trainer.log_metrics("train", metrics)
+    trainer.save_metrics("train", metrics)
+
+    eval_metrics = trainer.evaluate()
+    trainer.log_metrics("eval", eval_metrics)
+    trainer.save_metrics("eval", eval_metrics)
+
+    print(f"dpo_train_loss={metrics['train_loss']:.4f}")
+    print(f"dpo_eval_loss={eval_metrics.get('eval_loss', float('nan')):.4f}")
 
 if __name__ == "__main__":
     main()
