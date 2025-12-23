@@ -38,9 +38,24 @@ def load_jsonl_dir(path):
     else:
         files = [path]
     rows = []
-    for f in files:
-        with open(f, "r", encoding="utf-8") as fh:
-            rows.extend([json.loads(l) for l in fh])
+    for fname in files:
+        print(f"[load_jsonl_dir] Reading {fname}")
+        with open(fname, "r", encoding="utf-8") as fh:
+            for lineno, line in enumerate(fh, 1):
+                s = line.strip()
+                if not s:
+                    continue  # skip empty lines
+
+                try:
+                    rows.append(json.loads(s))
+                except json.JSONDecodeError as e:
+                    print(f"[load_jsonl_dir] JSON error in {fname}:{lineno}: {e}")
+                    print("[load_jsonl_dir] Offending line (truncated):")
+                    print(s[:300])
+                    # either re-raise to fail fast
+                    #raise
+
+    print(f"[load_jsonl_dir] Loaded {len(rows)} rows total")
     return rows
 
 def mk_dataset(rows):
@@ -55,6 +70,9 @@ def main():
 
     print("Transformers version:", transformers.__version__)
     print("TRL version:", trl.__version__)
+
+    train_rows = load_jsonl_dir(args.train_path)
+    val_rows   = load_jsonl_dir(args.val_path)
 
     tok = AutoTokenizer.from_pretrained(args.base_model_id, token=args.hf_token, trust_remote_code=True)
     if tok.pad_token is None: tok.pad_token = tok.eos_token
@@ -76,6 +94,12 @@ def main():
         quantization_config=quant_config,
         device_map="auto",
     )
+
+    # --- Baseline CE on the base model (quantized, no LoRA) ---
+    from training.sft.eval_wfl import eval_pass_rate, eval_ce
+    ce_base = eval_ce(model, tok, val_rows)
+    print(f"cross_entropy_base={ce_base:.4f}")
+
     if use_4bit:
         model = prepare_model_for_kbit_training(model)
 
@@ -84,9 +108,6 @@ def main():
         bias="none", task_type="CAUSAL_LM"
     )
     model = get_peft_model(model, peft_cfg)
-
-    train_rows = load_jsonl_dir(args.train_path)
-    val_rows   = load_jsonl_dir(args.val_path)
 
     train_ds = mk_dataset(train_rows)
     val_ds   = mk_dataset(val_rows)
@@ -110,6 +131,8 @@ def main():
         truncation=True,
     )
     print("input_ids dtype:", enc["input_ids"].dtype)
+
+    model.config.use_cache = False
 
     sft_config = SFTConfig(
         output_dir=args.output_dir,
@@ -142,13 +165,19 @@ def main():
     trainer.train()
     trainer.save_model(args.output_dir)
 
-    # quick eval: percentage of model generations that pass your validator
-    from training.sft.eval_wfl import eval_pass_rate
+    # quick eval: percentage of model generations that pass validator
     rate = eval_pass_rate(model, tok, val_rows)
     print(f"eval_pass_rate={rate:.4f}")
 
+    ce_sft  = eval_ce(model, tok, val_rows)
+
+    print(f"cross_entropy_sft={ce_sft:.4f}")
+    print(f"delta={(ce_base - ce_sft):.4f}")
+
     eval_metrics = trainer.evaluate()
-    ppl = math.exp(eval_metrics["eval_loss"])
+    eval_loss = eval_metrics["eval_loss"]
+    print(f"eval_loss={eval_loss:.4f}")
+    ppl = math.exp(eval_loss)
     print(f"eval_perplexity={ppl:.4f}")
 
 if __name__ == "__main__":

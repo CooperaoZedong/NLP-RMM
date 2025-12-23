@@ -28,7 +28,9 @@ def launch_dpo_training(
     # --- Terraform "locals" recreation -------------------------------------
     s3_code       = f"s3://{s3_bucket}/{s3_code_prefix}/src.tar.gz"
     s3_pairs  = f"s3://{s3_bucket}/{s3_data_prefix}/dpo/pairs.jsonl"
+    s3_val_pairs = f"s3://{s3_bucket}/{s3_data_prefix}/dpo/eval_pairs.jsonl"
     s3_output_dpo = f"s3://{s3_bucket}/outputs/dpo"
+    s3_sft_model = f"s3://{s3_bucket}/outputs/sft/nlp-rmm-sft-20251117-161116/output/model.tar.gz"
 
     # make job name unique to avoid "already exists" errors
     ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
@@ -40,15 +42,16 @@ def launch_dpo_training(
     hyperparameters = {
         "sagemaker_submit_directory": s3_code,
         "sagemaker_program": "training/dpo/train_dpo.py",
-        "base_model_id": base_model_id,
+        "base_model_id": "/opt/ml/input/data/sft_model/model.tar.gz",
         "hf_token": hf_token,
-        "per_device_train_batch_size": "2",
-        "gradient_accumulation_steps": "8",
+        # "per_device_train_batch_size": "2",
+        # "gradient_accumulation_steps": "8",
         "beta": "0.1",
-        "num_train_epochs": "1",
-        "learning_rate": "5e-6",
+        # "learning_rate": "5e-6",
         "bnb_4bit": "true",
-        "max_seq_length": "2048"
+        "epochs": "1",
+        "lr": "5e-6"
+        # "max_seq_length": "2048"
     }
 
     # --- Input channels -----------------------------------------------------
@@ -62,6 +65,26 @@ def launch_dpo_training(
                     "S3DataDistributionType": "FullyReplicated",
                 }
             }
+        },
+        {
+            "ChannelName": "eval_pairs",
+            "DataSource": {
+                "S3DataSource": {
+                    "S3DataType": "S3Prefix",
+                    "S3Uri": s3_val_pairs,
+                    "S3DataDistributionType": "FullyReplicated",
+                }
+            },
+        },
+        {
+            "ChannelName": "sft_model",
+            "DataSource": {
+                "S3DataSource": {
+                    "S3DataType": "S3Prefix",
+                    "S3Uri": s3_sft_model,
+                    "S3DataDistributionType": "FullyReplicated",
+                }
+            }
         }
     ]
 
@@ -71,14 +94,14 @@ def launch_dpo_training(
         "TrainingInputMode": "File",
         "MetricDefinitions": [
             {
-                "Name": "dpo/train_loss",
-                "Regex": "dpo_train_loss=(.*)",
+                "Name": "dpo_train_loss",
+                "Regex": "dpo_train_loss=([0-9\\.]+)",
             },
             {
-                "Name": "dpo/eval_loss",
-                "Regex": "dpo_eval_loss=(.*)",
-            }
-        ],
+                "Name": "dpo_eval_loss",
+                "Regex": "dpo_eval_loss=([0-9\\.]+)",
+            },
+        ]
     }
 
     # --- Resource config / stopping condition ------------------------------
@@ -119,15 +142,15 @@ def launch_dpo_training(
 if __name__ == "__main__":
     # Example usage: fill these from env/config/CLI
     training_job = launch_dpo_training(
-        project="my-project",
-        region="us-east-1",
-        s3_bucket="my-bucket",
+        project="nlp-rmm",
+        region="eu-west-1",
+        s3_bucket="nlp-rmm-artifacts",
         s3_code_prefix="code",
         s3_data_prefix="data",
-        role_arn="arn:aws:iam::123456789012:role/sagemaker-exec-role",
+        role_arn="arn:aws:iam::195275653465:role/nlp-rmm-sagemaker-exec",
         dpo_instance_type="ml.g5.2xlarge",
-        base_model_id="meta-llama/Llama-3-8B-Instruct",
-        huggingface_dlc_image_uri="763104351884.dkr.ecr.us-east-1.amazonaws.com/huggingface-pytorch-training:2.8.0-transformers4.56.2-gpu-py312-cu129-ubuntu22.04",
+        base_model_id="meta-llama/Llama-3.2-3B-Instruct",
+        huggingface_dlc_image_uri="763104351884.dkr.ecr.eu-west-1.amazonaws.com/huggingface-pytorch-training:2.8.0-transformers4.56.2-gpu-py312-cu129-ubuntu22.04",
         tags={"Project": "nlp-rmm", "Stage": "train"},
     )
     print("Launched:", training_job)

@@ -89,14 +89,30 @@ def launch_sft_training(
         "TrainingInputMode": "File",
         "MetricDefinitions": [
             {
-                "Name": "eval/pass_rate",
-                "Regex": "eval_pass_rate=(.*)",
+                "Name": "eval_pass_rate",
+                "Regex": "eval_pass_rate=([0-9\\.]+)",
             },
             {
-                "Name": "eval/perplexity",
-                "Regex": "eval_perplexity=(.*)"
+                "Name": "eval_perplexity",
+                "Regex": "eval_perplexity=([0-9\\.]+)",
+            },
+            {
+                "Name": "eval_loss",
+                "Regex": "eval_loss=([0-9\\.]+)",
+            },
+            {
+                "Name": "cross_entropy_base",
+                "Regex": "cross_entropy_base=([0-9\\.]+)",
+            },
+            {
+                "Name": "cross_entropy_sft",
+                "Regex": "cross_entropy_sft=([0-9\\.]+)",
+            },
+            {
+                "Name": "cross_entropy_delta",
+                "Regex": "delta=([0-9\\.]+)",
             }
-        ],
+        ]
     }
 
     # --- Resource config / stopping condition ------------------------------
@@ -107,7 +123,7 @@ def launch_sft_training(
     }
 
     stopping_condition = {
-        "MaxRuntimeInSeconds": 7200,
+        "MaxRuntimeInSeconds": 58000,
     }
 
     # --- Tags: dict -> list[{"Key","Value"}] -------------------------------

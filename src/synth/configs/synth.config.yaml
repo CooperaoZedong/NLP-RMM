@@ -15,12 +15,12 @@ hf:
 generation:
   temperature: 0.2
   top_p: 0.9
-  paraphrase_temperature: 0.5
+  paraphrase_temperature: 0.8
   paraphrase_top_p: 0.9
 
 targets:
-  target_count: 300
-  max_paraphrases_per_seed: 2
+  target_count: 500
+  max_paraphrases_per_seed: 5
 
 paths:
   seed_dir: seeds/wfl_templates

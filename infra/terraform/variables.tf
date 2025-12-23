@@ -6,6 +6,10 @@ variable "region" {
   type = string
   default = "eu-west-1"
 }
+variable "environment" {
+  type    = string
+  default = "dev"
+}
 variable "tags" {
   type = map(string)
   default = { App = "nlp-rmm" }
@@ -46,4 +50,40 @@ variable "s3_code_prefix" {
 variable "s3_data_prefix" {
   type = string
   default = "data"
+}
+
+variable "eks_cluster_name" {
+  type    = string
+  default = "nlp-rmm-dev-eks"
+}
+
+variable "hyperpod_cluster_name" {
+  type    = string
+  default = "nlp-rmm-dev-hp"
+}
+
+variable "vpc_cidr" {
+  type    = string
+  default = "10.40.0.0/16"
+}
+
+variable "private_subnet_cidrs" {
+  type    = list(string)
+  default = ["10.40.0.0/19", "10.40.32.0/19", "10.40.64.0/19"]
+}
+
+variable "public_subnet_cidrs" {
+  type    = list(string)
+  default = ["10.40.96.0/19", "10.40.128.0/19", "10.40.160.0/19"]
+}
+
+# HyperPod instance group sizing
+variable "hyperpod_instance_type" {
+  type    = string
+  default = "ml.g5.8xlarge"
+}
+
+variable "hyperpod_instance_count" {
+  type    = number
+  default = 2
 }

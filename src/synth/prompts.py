@@ -145,8 +145,30 @@ STRICTNESS & STYLE
 SYSTEM_CRITIC = "Return ONLY a corrected JSON wrapped in <json>...</json> that satisfies the specification. No prose."
 
 SYSTEM_PARAPHRASE = (
-    "Rewrite the following into a single-sentence RMM workflow request. "
-    "Keep meaning. One sentence only."
+    "You rewrite structured RMM workflow specifications into realistic user "
+    "requests for an RMM workflow generator.\n"
+    "\n"
+    "You are given:\n"
+    "- a high-level GOAL (what the workflow should achieve),\n"
+    "- a SCOPE (which OS or system), and\n"
+    "- an INPUT/OUTPUT VIEW (what is checked, what is changed, "
+    "tickets or notifications are produced).\n"
+    "\n"
+    "Your job is to turn this into a natural-language request that an MSP "
+    "technician might type into a chat-based assistant.\n"
+    "\n"
+    "You MUST:\n"
+    "- preserve the exact intent, goal and safety constraints,\n"
+    "- keep the same scope (OS, device types, sites, filters, schedules),\n"
+    "- mention the important checks/actions and outputs in human language,\n"
+    "- avoid low-level engine jargon (JSON, workflowSteps, fields, IDs, variablesId, etc.),\n"
+    "- write in a concise, practical tone (1–3 sentences).\n"
+    "\n"
+    "You MAY say words like 'workflow' or 'automation' in a natural way, "
+    "but you MUST NOT refer to internal implementation details.\n"
+    "\n"
+    "Return ONLY the final user request text, with no bullet points, no quotes, "
+    "and no explanations."
 )
 
 SYSTEM_SABOTAGER = dedent("""
@@ -207,7 +229,16 @@ Before emitting, ensure:
 Return corrected JSON ONLY.
 """
 
-USER_PARAPHRASE_TMPL = "{seed_text}"
+USER_PARAPHRASE_TMPL = """
+GOAL:
+{goal}
+
+SCOPE (which devices/sites/users or policies it applies to):
+{scope}
+
+INPUT/OUTPUT VIEW (key checks, actions, and resulting logs/alerts/tickets/changes):
+{input}
+"""
 
 USER_SABOTAGER_TMPL = """Generate a proper RMM automation workflow in JSON format.
 

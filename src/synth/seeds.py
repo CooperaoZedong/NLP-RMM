@@ -17,7 +17,12 @@ def load_seed_wfls(seed_dir: str):
         seeds.append(json.loads(s[i:end]))
     return seeds
 
-def verbalize_seed(obj: dict) -> str:
+def verbalize_seed(obj: dict) -> dict:
     name = (obj.get("Name") or "").strip()
     desc = (obj.get("Description") or "").strip()
-    return (desc or name or "Create an RMM workflow.").strip()
+    scope = (obj.get("Scope") or "All Systems").strip()
+    return {
+        'primary_goal': name or desc,
+        'os_scope': scope
+    }
+    #return (desc or name or "Create an RMM workflow.").strip()

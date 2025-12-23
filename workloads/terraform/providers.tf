@@ -5,10 +5,6 @@ terraform {
       source  = "hashicorp/aws"
       version = "= 5.68.0"
     }
-    awscc = {
-      source  = "hashicorp/awscc"
-      version = "~> 1.0"
-    }
     kubernetes = {
       source  = "hashicorp/kubernetes"
       version = "~> 2.0"
@@ -24,17 +20,21 @@ provider "aws" {
   region = var.region
 }
 
-provider "awscc" {
-  region = var.region
+data "terraform_remote_state" "infra" {
+  backend = "s3"
+  config = {
+    bucket = var.tf_state_bucket
+    key    = var.infra_state_key   # e.g. "infra/terraform.tfstate"
+    region = var.region
+  }
 }
 
-# EKS cluster must exist (module.eks) before these data sources can resolve
 data "aws_eks_cluster" "this" {
-  name = module.eks.cluster_name
+  name = data.terraform_remote_state.infra.outputs.eks_cluster_name
 }
 
 data "aws_eks_cluster_auth" "this" {
-  name = module.eks.cluster_name
+  name = data.terraform_remote_state.infra.outputs.eks_cluster_name
 }
 
 provider "kubernetes" {
@@ -49,14 +49,4 @@ provider "helm" {
     cluster_ca_certificate = base64decode(data.aws_eks_cluster.this.certificate_authority[0].data)
     token                  = data.aws_eks_cluster_auth.this.token
   }
-}
-
-# HyperPod dependency chart — install into EKS BEFORE creating HyperPod cluster.
-resource "helm_release" "hyperpod_dependencies" {
-  name      = "hyperpod-dependencies"
-  namespace = "kube-system"
-  chart     = "${path.module}/../../vendor/sagemaker-hyperpod-cli/helm_chart/HyperPodHelmChart"
-
-  # If this chart needs CRDs on install:
-  # set { name = "installCRDs", value = "true" }
 }

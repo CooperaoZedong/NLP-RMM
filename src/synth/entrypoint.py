@@ -84,7 +84,7 @@ def main():
                             top_p=gen["paraphrase_top_p"])
         paraphrase_total += len(paras)
         if idx % sample_every == 0:
-            LOG.info("seed %d/%d base=%r paras=%d", idx, len(seeds), base[:80], len(paras))
+            LOG.info("seed %d/%d base=%r paras=%d", idx, len(seeds), base['primary_goal'][:80], len(paras))
 
         for pr in paras:
             try:
