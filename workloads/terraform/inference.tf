@@ -8,10 +8,11 @@ resource "helm_release" "hyperpod_inference_operator" {
   namespace = "kube-system"
   chart     = "${path.module}/../../vendor/sagemaker-hyperpod-cli/helm_chart/HyperPodHelmChart/charts/inference-operator"
 
-  # Pass cluster ARN if your chart expects it (depends on chart values schema)
+  # Pass cluster ARN
   # set { name = "hyperpodClusterArn", value = data.terraform_remote_state.infra.outputs.hyperpod_cluster_arn }
 
-  # You typically also need the AWS LB Controller installed if you want LoadBalancer exposure.
+  set { name = "serviceAccount.create", value = "false" }
+  set { name = "serviceAccount.name",   value = kubernetes_service_account.inference_sa.metadata[0].name }
 }
 
 resource "kubernetes_manifest" "inference_endpoint" {
@@ -20,7 +21,7 @@ resource "kubernetes_manifest" "inference_endpoint" {
     kind       = "InferenceEndpointConfig"
     metadata = {
       name      = var.endpoint_name
-      namespace = var.inference_namespace
+      namespace = kubernetes_namespace.inference.metadata[0].name
     }
     spec = {
       modelName    = var.endpoint_name
@@ -36,7 +37,7 @@ resource "kubernetes_manifest" "inference_endpoint" {
         prefetchEnabled = true
       }
 
-      # If you want external access
+      # external access
       loadBalancer = {
         healthCheckPath = "/health"
       }

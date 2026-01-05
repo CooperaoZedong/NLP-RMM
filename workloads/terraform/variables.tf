@@ -5,10 +5,12 @@ variable "region" {
 
 variable "tf_state_bucket" {
   type = string
+  default = "nlp-rmm-tf-state-eu-west-1"
 }
 
 variable "infra_state_key" {
   type = string
+  default = "infra/terraform.tfstate"
 }
 
 # Inference endpoint settings

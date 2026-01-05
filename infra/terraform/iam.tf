@@ -3,7 +3,7 @@ data "aws_iam_policy_document" "sagemaker_assume" {
   statement {
     actions = ["sts:AssumeRole"]
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = ["sagemaker.amazonaws.com"]
     }
   }
@@ -22,15 +22,15 @@ data "aws_iam_policy_document" "sagemaker_access" {
     resources = [aws_s3_bucket.artifacts.arn]
   }
   statement {
-    actions   = ["s3:GetObject","s3:PutObject","s3:DeleteObject"]
+    actions   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
     resources = ["${aws_s3_bucket.artifacts.arn}/*"]
   }
   statement {
-    actions   = ["logs:CreateLogGroup","logs:CreateLogStream","logs:PutLogEvents"]
+    actions   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
     resources = ["*"]
   }
   statement {
-    actions   = ["kms:Encrypt","kms:Decrypt","kms:GenerateDataKey*","kms:DescribeKey"]
+    actions   = ["kms:Encrypt", "kms:Decrypt", "kms:GenerateDataKey*", "kms:DescribeKey"]
     resources = [aws_kms_key.s3_kms.arn]
   }
 }

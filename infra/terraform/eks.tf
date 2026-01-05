@@ -27,6 +27,10 @@ module "eks" {
   vpc_id     = module.vpc.vpc_id
   subnet_ids = module.vpc.private_subnets
 
+  cluster_endpoint_public_access  = true
+  cluster_endpoint_private_access = true
+  public_access_cidrs             = ["0.0.0.0/0"] # tighten later
+
   # let Terraform/Helm manage aws-auth via access entries if you prefer
   enable_cluster_creator_admin_permissions = true
 

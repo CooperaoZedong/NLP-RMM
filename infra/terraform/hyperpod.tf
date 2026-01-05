@@ -1,10 +1,5 @@
 data "aws_caller_identity" "current" {}
 
-resource "aws_s3_bucket" "artifacts" {
-  bucket = var.s3_bucket
-  tags   = var.tags
-}
-
 # HyperPod lifecycle bucket must be sagemaker-... prefixed
 resource "aws_s3_bucket" "hp_lifecycle" {
   bucket = "sagemaker-${data.aws_caller_identity.current.account_id}-${var.project}-${var.environment}-hp-lifecycle"
@@ -23,16 +18,16 @@ resource "aws_iam_role" "hp_instance_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
+      Effect    = "Allow",
       Principal = { Service = "sagemaker.amazonaws.com" },
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
 }
 
 resource "aws_iam_role_policy_attachment" "hp_instance_managed" {
   role       = aws_iam_role.hp_instance_role.name
-  policy_arn  = "arn:aws:iam::aws:policy/AmazonSageMakerClusterInstanceRolePolicy"
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSageMakerClusterInstanceRolePolicy"
 }
 
 resource "aws_security_group" "hp" {
@@ -81,6 +76,7 @@ resource "awscc_sagemaker_cluster" "hp" {
   ]
 
   depends_on = [
-    helm_release.hyperpod_dependencies
+    helm_release.hyperpod_dependencies,
+    aws_s3_object.hp_oncreate
   ]
 }

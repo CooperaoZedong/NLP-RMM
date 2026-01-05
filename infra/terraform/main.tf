@@ -3,7 +3,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "= 5.68.0"
+      version = "~> 5.95"
     }
     awscc = {
       source  = "hashicorp/awscc"
@@ -16,6 +16,14 @@ terraform {
     helm = {
       source  = "hashicorp/helm"
       version = "~> 2.0"
+    }
+    tls = {
+      source  = "hashicorp/tls"
+      version = ">= 3.0.0"
+    }
+    time = {
+      source  = "hashicorp/time"
+      version = ">= 0.9.0"
     }
   }
 }
@@ -59,4 +67,5 @@ resource "helm_release" "hyperpod_dependencies" {
 
   # If this chart needs CRDs on install:
   # set { name = "installCRDs", value = "true" }
+  depends_on = [module.eks]
 }
